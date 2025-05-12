@@ -1,50 +1,72 @@
-let facemesh;
+// Face Mesh Detection - Triangulated Face Mapping  
+// https://thecodingtrain.com/tracks/ml5js-beginners-guide/ml5/facemesh  
+// https://youtu.be/R5UZsIwPbJA  
+
 let video;
-let predictions = [];
-const points = [409, 270, 269, 267, 0, 37, 39, 40, 185, 61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291];
+let faceMesh;
+let faces = [];
+let triangles;
 
-function setup() {
-  userStartAudio(); // 等待用戶互動後啟動音訊
-  createCanvas(400, 400);
-  video = createCapture(VIDEO, function(stream) {
-    console.log("Video stream started");
-  }, function(err) {
-    console.error("Error accessing video stream:", err);
-  });
-  video.size(width, height);
-  video.hide();
-
-  facemesh = ml5.facemesh(video, modelReady);
-  facemesh.on("predict", results => {
-    predictions = results;
-  });
+function preload() {
+  // Load FaceMesh model 
+  faceMesh = ml5.faceMesh({ maxFaces: 1, flipped: true });
 }
 
-function modelReady() {
-  console.log("Facemesh model loaded!");
+function mousePressed() {
+  console.log(faces);
+}
+
+function gotFaces(results) {
+  faces = results;
+}
+
+function setup() {
+  createCanvas(640, 480);
+  video = createCapture(VIDEO, { flipped: true });
+  video.hide();
+
+  // Start detecting faces
+  faceMesh.detectStart(video, gotFaces);
+
+  // Get predefined triangle connections
+  triangles = faceMesh.getTriangles();
 }
 
 function draw() {
-  image(video, 0, 0, width, height);
-  drawFacemesh();
-}
+  background(0);
+  video.loadPixels();
 
-function drawFacemesh() {
-  if (predictions.length > 0) {
-    const keypoints = predictions[0].scaledMesh;
+  if (faces.length > 0) {
+    let face = faces[0];
 
-    stroke(255, 0, 0); // 紅色線條
-    strokeWeight(5); // 線條粗細為 5
+    randomSeed(5);
+    beginShape(TRIANGLES);
+    
+    // Loop through each triangle and fill it with sampled pixel color
+    for (let i = 0; i < triangles.length; i++) {
+      let tri = triangles[i];
+      let [a, b, c] = tri;
+      let pointA = face.keypoints[a];
+      let pointB = face.keypoints[b];
+      let pointC = face.keypoints[c];
 
-    for (let i = 0; i < points.length - 1; i++) {
-      const [x1, y1] = keypoints[points[i]];
-      const [x2, y2] = keypoints[points[i + 1]];
-      line(x1, y1, x2, y2); // 畫出兩點之間的線
+      // Calculate the centroid of the triangle
+      let cx = (pointA.x + pointB.x + pointC.x) / 3;
+      let cy = (pointA.y + pointB.y + pointC.y) / 3;
+
+      // Get color from video pixels at centroid location
+      let index = (floor(cx) + floor(cy) * video.width) * 4;
+      let rr = video.pixels[index];
+      let gg = video.pixels[index + 1];
+      let bb = video.pixels[index + 2];
+
+      stroke(255, 255, 0);
+      fill(rr, gg, bb);
+      vertex(pointA.x, pointA.y);
+      vertex(pointB.x, pointB.y);
+      vertex(pointC.x, pointC.y);
     }
-
-    // 將最後一點與第一點連接
-    const [xStart, yStart] = keypoints[points[0]];
-    const [xEnd, yEnd] = keypoints[points[points.length - 1]];
-    line(xEnd, yEnd, xStart, yStart);
+    
+    endShape();
   }
 }
